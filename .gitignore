@@ -1,0 +1,11 @@
+.env
+data/
+__pycache__/
+*.pyc
+*.pyo
+bot.log
+geckodriver.log
+*.db
+*.sqlite
+venv/
+.venv/
