@@ -5,12 +5,13 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Optional, Set
 
-from api_client import ApiClient
+from api_client import ApiClient, ApiError
 from config import LOOKBACK_MINUTES, TRADER_ID
 
 logger = logging.getLogger(__name__)
 
 OnStartupCallback = Callable[[Optional[float], Optional[float]], Awaitable[None]]
+OnErrorCallback   = Callable[[Exception], Awaitable[None]]
 
 
 class OrderMonitor:
@@ -19,13 +20,15 @@ class OrderMonitor:
         client:        ApiClient,
         queue:         asyncio.Queue,
         on_startup_ok: Optional[OnStartupCallback] = None,
-        min_amount:    Optional[float] = None,
-        max_amount:    Optional[float] = None,
-        poll_interval: float           = 1.0,
+        on_error:      Optional[OnErrorCallback]   = None,
+        min_amount:    Optional[float]             = None,
+        max_amount:    Optional[float]             = None,
+        poll_interval: float                       = 1.0,
     ) -> None:
         self._client        = client
         self._queue         = queue
         self._on_startup    = on_startup_ok
+        self._on_error      = on_error
         self.min_amount     = min_amount
         self.max_amount     = max_amount
         self.poll_interval  = poll_interval
@@ -48,6 +51,19 @@ class OrderMonitor:
                 await self._poll()
             except asyncio.CancelledError:
                 break
+            except ApiError as exc:
+                if exc.status == 429:
+                    logger.error("Poll error: HTTP 429 Too Many Requests: %s", exc.body)
+                    if self._on_error:
+                        try:
+                            await self._on_error(exc)
+                        except Exception as cb_exc:
+                            logger.warning("Error callback failed: %s", cb_exc)
+                    if not self._running:
+                        break
+                    await asyncio.sleep(10.0)
+                    continue
+                logger.exception("Poll error: %s", exc)
             except Exception as exc:
                 logger.exception("Poll error: %s", exc)
             if not self._running:

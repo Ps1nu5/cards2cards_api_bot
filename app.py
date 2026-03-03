@@ -17,6 +17,7 @@ from cognito_auth import CredentialManager
 from db.engine import get_session, init_db
 from db.repository import OrderLogRepository, SettingsRepository, SubscriberRepository
 from monitor import OrderMonitor
+from api_client import ApiError
 from processor import OrderProcessor
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,7 @@ class App:
             client        = self._client,
             queue         = self._queue,
             on_startup_ok = self._on_startup_ok if notify else None,
+            on_error      = self._on_monitor_error,
             min_amount    = self.min_amount,
             max_amount    = self.max_amount,
             poll_interval = self.poll_interval,
@@ -187,6 +189,15 @@ class App:
         self.orders_failed += 1
         await self._log_order(slug, amount, "failed")
         logger.warning("Order %s failed (amount=%s)", slug, amount)
+
+    async def _on_monitor_error(self, exc: Exception) -> None:
+        if isinstance(exc, ApiError) and exc.is_rate_limited:
+            await self._broadcast(
+                "⚠️ <b>Превышен лимит запросов к API</b>\n\n"
+                "Сервис вернул ошибку HTTP 429 Too Many Requests.\n"
+                f"Текущий интервал опроса: <b>{self.poll_interval:g} сек.</b>\n\n"
+                "Бот сделает паузу на 10 секунд и продолжит работу автоматически."
+            )
 
     async def _on_startup_ok(
         self, min_amount: Optional[float], max_amount: Optional[float]

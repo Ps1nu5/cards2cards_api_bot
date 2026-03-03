@@ -36,6 +36,10 @@ class ApiError(Exception):
     def is_auth_error(self) -> bool:
         return self.status in (401, 403)
 
+    @property
+    def is_rate_limited(self) -> bool:
+        return self.status == 429
+
 
 class ApiClient:
     def __init__(
