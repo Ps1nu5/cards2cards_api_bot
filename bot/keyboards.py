@@ -17,21 +17,8 @@ def main_menu_keyboard(is_running: bool) -> InlineKeyboardMarkup:
 def settings_menu_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="💰 Фильтры суммы",   callback_data="settings:filters")
-    builder.button(text="🔔 Оповещения",      callback_data="settings:notifications")
     builder.button(text="⏱ Интервал опроса", callback_data="settings:poll_interval")
     builder.button(text="◀️ Назад",           callback_data="settings:back")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
-def notifications_keyboard(notify_taken: bool) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    status = "ВКЛ ✅" if notify_taken else "ВЫКЛ ❌"
-    builder.button(
-        text=f"Уведомления о взятых ордерах: {status}",
-        callback_data="settings:notify_toggle",
-    )
-    builder.button(text="◀️ Назад к настройкам", callback_data="settings:menu")
     builder.adjust(1)
     return builder.as_markup()
 

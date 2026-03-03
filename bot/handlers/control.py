@@ -14,6 +14,8 @@ async def bot_start(callback: CallbackQuery, app) -> None:
         await callback.answer("Бот уже запущен.", show_alert=True)
         return
 
+    app.set_last_starter(callback.message.chat.id)
+
     await callback.message.edit_text("Запускаю бота, подождите...")
     await app.start_monitoring()
     await callback.message.edit_text(

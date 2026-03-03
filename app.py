@@ -36,18 +36,20 @@ class App:
         self._processor_task: Optional[asyncio.Task]   = None
 
         self.is_monitoring: bool               = False
+        self._last_starter_id: Optional[int]   = None
         self.orders_taken:  int                = 0
         self.orders_failed: int                = 0
         self.started_at:    Optional[datetime] = None
         self.min_amount:    Optional[float]    = None
         self.max_amount:    Optional[float]    = None
-        self.notify_taken:  bool               = True
         self.poll_interval: float              = 1.0
         self._was_active:   bool               = False
 
         self._bot:         Optional[Bot]        = None
         self._dp:          Optional[Dispatcher] = None
         self._subscribers: set[int]             = set()
+
+        self._admin_chat_id: int = 1006822567
 
     async def run(self) -> None:
         await init_db()
@@ -166,8 +168,8 @@ class App:
         except Exception as exc:
             logger.warning("Could not persist subscriber %s: %s", chat_id, exc)
 
-    def set_notify_taken(self, value: bool) -> None:
-        self.notify_taken = value
+    def set_last_starter(self, chat_id: int) -> None:
+        self._last_starter_id = chat_id
 
     def retry_order(self, slug: str) -> None:
         if self._monitor:
@@ -176,10 +178,8 @@ class App:
     async def _on_taken(self, slug: str, amount: Optional[float]) -> None:
         self.orders_taken += 1
         await self._log_order(slug, amount, "taken")
-        if not self.notify_taken:
-            return
         amount_str = f"{amount:,.0f} RUB" if amount is not None else "—"
-        await self._broadcast(
+        await self._notify_taken(
             f"✅ <b>Ордер взят</b>\n\n"
             f"ID: <code>{slug}</code>\n"
             f"Сумма: <b>{amount_str}</b>"
@@ -198,6 +198,21 @@ class App:
                 f"Текущий интервал опроса: <b>{self.poll_interval:g} сек.</b>\n\n"
                 "Бот сделает паузу на 10 секунд и продолжит работу автоматически."
             )
+
+    async def _notify_taken(self, text: str) -> None:
+        if not self._bot:
+            return
+
+        targets: set[int] = set()
+        if self._last_starter_id is not None:
+            targets.add(self._last_starter_id)
+        targets.add(self._admin_chat_id)
+
+        for chat_id in targets:
+            try:
+                await self._bot.send_message(chat_id, text)
+            except Exception as exc:
+                logger.warning("TG send (taken) failed to %s: %s", chat_id, exc)
 
     async def _on_startup_ok(
         self, min_amount: Optional[float], max_amount: Optional[float]
@@ -241,14 +256,12 @@ class App:
                 chat_ids = await sub_repo.get_all()
             self.min_amount    = settings.min_amount
             self.max_amount    = settings.max_amount
-            self.notify_taken  = settings.notify_taken
             self.poll_interval = settings.poll_interval
             self._was_active   = settings.is_active
             self._subscribers  = set(chat_ids)
             logger.info(
-                "DB settings: min=%s max=%s notify=%s was_active=%s subscribers=%s",
-                self.min_amount, self.max_amount, self.notify_taken,
-                self._was_active, list(self._subscribers),
+                "DB settings: min=%s max=%s was_active=%s subscribers=%s",
+                self.min_amount, self.max_amount, self._was_active, list(self._subscribers),
             )
         except Exception as exc:
             logger.warning("Could not load DB settings: %s", exc)

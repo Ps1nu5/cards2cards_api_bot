@@ -7,7 +7,6 @@ from bot.keyboards import (
     cancel_keyboard,
     filters_confirm_keyboard,
     main_menu_keyboard,
-    notifications_keyboard,
     settings_menu_keyboard,
 )
 from db.engine import get_session
@@ -154,36 +153,6 @@ async def filters_edit(callback: CallbackQuery, state: FSMContext) -> None:
     )
     await state.set_state(FiltersFSM.min_amount)
     await callback.answer()
-
-
-@router.callback_query(F.data == "settings:notifications")
-async def notifications_menu(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
-    async with get_session() as session:
-        repo = SettingsRepository(session)
-        settings = await repo.get_or_create()
-    await callback.message.edit_text(
-        "🔔 Настройка оповещений:",
-        reply_markup=notifications_keyboard(settings.notify_taken),
-    )
-    await callback.answer()
-
-
-@router.callback_query(F.data == "settings:notify_toggle")
-async def notify_toggle(callback: CallbackQuery, app) -> None:
-    async with get_session() as session:
-        repo = SettingsRepository(session)
-        settings = await repo.get_or_create()
-        new_val = not settings.notify_taken
-        await repo.update(notify_taken=new_val)
-
-    app.set_notify_taken(new_val)
-
-    await callback.message.edit_text(
-        "🔔 Настройка оповещений:",
-        reply_markup=notifications_keyboard(new_val),
-    )
-    await callback.answer("Включено" if new_val else "Отключено")
 
 
 class PollIntervalFSM(StatesGroup):

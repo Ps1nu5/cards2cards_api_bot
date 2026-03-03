@@ -28,18 +28,12 @@ async def cmd_start(message: Message, app) -> None:
         else "Фильтр суммы: не задан"
     )
 
-    notify_line = (
-        "Уведомления о взятых ордерах: ВКЛ"
-        if settings.notify_taken
-        else "Уведомления о взятых ордерах: ВЫКЛ"
-    )
-
     status_line = "Статус: ✅ работает" if app.is_monitoring else "Статус: ⛔ остановлен"
 
     await message.answer(
         f"<b>Cards2cards бот</b>\n\n"
         f"{status_line}\n"
         f"{filter_line}\n"
-        f"{notify_line}",
+        "Уведомления о взятых ордерах: всегда включены",
         reply_markup=main_menu_keyboard(app.is_monitoring),
     )
