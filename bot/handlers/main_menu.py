@@ -5,6 +5,7 @@ from aiogram.types import Message
 from bot.keyboards import main_menu_keyboard
 from db.engine import get_session
 from db.repository import SettingsRepository
+from order_payment import payment_filter_label
 
 router = Router()
 
@@ -28,12 +29,16 @@ async def cmd_start(message: Message, app) -> None:
         else "Фильтр суммы: не задан"
     )
 
+    payment_line = payment_filter_label(
+        getattr(settings, "payment_filter", None) or app.payment_filter
+    )
     status_line = "Статус: ✅ работает" if app.is_monitoring else "Статус: ⛔ остановлен"
 
     await message.answer(
         f"<b>Cards2cards бот</b>\n\n"
         f"{status_line}\n"
         f"{filter_line}\n"
+        f"Реквизиты: {payment_line}\n"
         "Уведомления о взятых ордерах: всегда включены",
         reply_markup=main_menu_keyboard(app.is_monitoring),
     )

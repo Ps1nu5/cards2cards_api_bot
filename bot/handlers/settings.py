@@ -7,12 +7,16 @@ from bot.keyboards import (
     cancel_keyboard,
     filters_confirm_keyboard,
     main_menu_keyboard,
+    payment_filter_keyboard,
     settings_menu_keyboard,
 )
 from db.engine import get_session
 from db.repository import SettingsRepository
+from order_payment import payment_filter_label
 
 router = Router()
+
+_VALID_PAYMENT_FILTERS = frozenset({"all", "sbp", "card"})
 
 
 class FiltersFSM(StatesGroup):
@@ -141,6 +145,45 @@ async def filters_save(callback: CallbackQuery, state: FSMContext, app) -> None:
         reply_markup=settings_menu_keyboard(),
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "settings:payment")
+async def payment_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    async with get_session() as session:
+        repo = SettingsRepository(session)
+        settings = await repo.get_or_create()
+    current = getattr(settings, "payment_filter", None) or "all"
+    await callback.message.edit_text(
+        "💳 <b>Тип реквизитов</b>\n\n"
+        f"Сейчас: <b>{payment_filter_label(current)}</b>",
+        reply_markup=payment_filter_keyboard(current),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("settings:payment_set:"))
+async def payment_set(callback: CallbackQuery, app) -> None:
+    value = callback.data.rsplit(":", 1)[-1]
+    if value not in _VALID_PAYMENT_FILTERS:
+        await callback.answer("Неизвестный режим.", show_alert=True)
+        return
+
+    async with get_session() as session:
+        repo = SettingsRepository(session)
+        await repo.update(payment_filter=value)
+
+    app.payment_filter = value
+    if app.is_monitoring:
+        await app.stop_monitoring()
+        await app.start_monitoring(notify=False)
+
+    await callback.message.edit_text(
+        "💳 <b>Тип реквизитов</b>\n\n"
+        f"Сейчас: <b>{payment_filter_label(value)}</b>",
+        reply_markup=payment_filter_keyboard(value),
+    )
+    await callback.answer("Сохранено")
 
 
 @router.callback_query(F.data == "filters:edit", FiltersFSM.confirm)

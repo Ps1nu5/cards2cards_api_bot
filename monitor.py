@@ -7,6 +7,7 @@ from typing import Awaitable, Callable, Optional, Set
 
 from api_client import ApiClient, ApiError
 from config import LOOKBACK_MINUTES, TRADER_ID
+from order_payment import matches_payment_filter, order_payment_kind
 
 logger = logging.getLogger(__name__)
 
@@ -21,17 +22,19 @@ class OrderMonitor:
         queue:         asyncio.Queue,
         on_startup_ok: Optional[OnStartupCallback] = None,
         on_error:      Optional[OnErrorCallback]   = None,
-        min_amount:    Optional[float]             = None,
-        max_amount:    Optional[float]             = None,
-        poll_interval: float                       = 1.0,
+        min_amount:     Optional[float]             = None,
+        max_amount:     Optional[float]             = None,
+        poll_interval:  float                       = 1.0,
+        payment_filter: str                         = "all",
     ) -> None:
         self._client        = client
         self._queue         = queue
         self._on_startup    = on_startup_ok
         self._on_error      = on_error
-        self.min_amount     = min_amount
-        self.max_amount     = max_amount
-        self.poll_interval  = poll_interval
+        self.min_amount      = min_amount
+        self.max_amount      = max_amount
+        self.poll_interval   = poll_interval
+        self.payment_filter  = payment_filter
 
         self._seen:       Set[str] = set()
         self._running             = False
@@ -43,8 +46,9 @@ class OrderMonitor:
     async def run(self) -> None:
         self._running = True
         logger.info(
-            "Monitor started — poll=%.2fs lookback=%dm filter=[%s, %s]",
-            self.poll_interval, LOOKBACK_MINUTES, self.min_amount, self.max_amount,
+            "Monitor started — poll=%.2fs lookback=%dm amount=[%s, %s] payment=%s",
+            self.poll_interval, LOOKBACK_MINUTES,
+            self.min_amount, self.max_amount, self.payment_filter,
         )
         while self._running:
             try:
@@ -81,8 +85,7 @@ class OrderMonitor:
                 slug = _slug(order)
                 if not slug:
                     continue
-                amount = _rub_amount(order)
-                if not self._in_range(amount):
+                if not self._accept_order(order):
                     self._seen.add(slug)
                     primed += 1
             logger.info(
@@ -103,17 +106,27 @@ class OrderMonitor:
             if not slug or slug in self._seen:
                 continue
 
-            amount = _rub_amount(order)
-            if not self._in_range(amount):
+            if not self._accept_order(order):
                 self._seen.add(slug)
                 continue
 
+            amount = _rub_amount(order)
             self._seen.add(slug)
             await self._queue.put({"slug": slug, "amount": amount, "raw": order})
             enqueued += 1
 
         if enqueued:
             logger.info("Enqueued %d new order(s)", enqueued)
+
+    def _accept_order(self, order: dict) -> bool:
+        if not matches_payment_filter(order, self.payment_filter):
+            kind = order_payment_kind(order)
+            logger.debug(
+                "Skip %s: payment=%s filter=%s",
+                _slug(order), kind, self.payment_filter,
+            )
+            return False
+        return self._in_range(_rub_amount(order))
 
     def _in_range(self, amount: Optional[float]) -> bool:
         if self.min_amount is None and self.max_amount is None:

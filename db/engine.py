@@ -15,6 +15,7 @@ async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 _MIGRATIONS = [
     "ALTER TABLE settings ADD COLUMN poll_interval REAL NOT NULL DEFAULT 1.0",
+    "ALTER TABLE settings ADD COLUMN payment_filter TEXT NOT NULL DEFAULT 'all'",
 ]
 
 

@@ -17,6 +17,7 @@ from cognito_auth import CredentialManager
 from db.engine import get_session, init_db
 from db.repository import OrderLogRepository, SettingsRepository, SubscriberRepository
 from monitor import OrderMonitor
+from order_payment import payment_filter_label
 from api_client import ApiError
 from processor import OrderProcessor
 
@@ -42,8 +43,9 @@ class App:
         self.started_at:    Optional[datetime] = None
         self.min_amount:    Optional[float]    = None
         self.max_amount:    Optional[float]    = None
-        self.poll_interval: float              = 1.0
-        self._was_active:   bool               = False
+        self.poll_interval:  float              = 1.0
+        self.payment_filter: str                = "all"
+        self._was_active:    bool               = False
 
         self._bot:         Optional[Bot]        = None
         self._dp:          Optional[Dispatcher] = None
@@ -112,9 +114,10 @@ class App:
             queue         = self._queue,
             on_startup_ok = self._on_startup_ok if notify else None,
             on_error      = self._on_monitor_error,
-            min_amount    = self.min_amount,
-            max_amount    = self.max_amount,
-            poll_interval = self.poll_interval,
+            min_amount     = self.min_amount,
+            max_amount     = self.max_amount,
+            poll_interval  = self.poll_interval,
+            payment_filter = self.payment_filter,
         )
         self._processor = OrderProcessor(
             client    = self._client,
@@ -132,8 +135,9 @@ class App:
 
         await self._save_is_active(True)
         logger.info(
-            "Monitoring started (filter: %s – %s RUB, poll=%.2fs)",
-            self.min_amount, self.max_amount, self.poll_interval,
+            "Monitoring started (amount: %s – %s RUB, payment: %s, poll=%.2fs)",
+            self.min_amount, self.max_amount,
+            payment_filter_label(self.payment_filter), self.poll_interval,
         )
         return True
 
@@ -256,12 +260,14 @@ class App:
                 chat_ids = await sub_repo.get_all()
             self.min_amount    = settings.min_amount
             self.max_amount    = settings.max_amount
-            self.poll_interval = settings.poll_interval
-            self._was_active   = settings.is_active
+            self.poll_interval  = settings.poll_interval
+            self.payment_filter = getattr(settings, "payment_filter", None) or "all"
+            self._was_active    = settings.is_active
             self._subscribers  = set(chat_ids)
             logger.info(
-                "DB settings: min=%s max=%s was_active=%s subscribers=%s",
-                self.min_amount, self.max_amount, self._was_active, list(self._subscribers),
+                "DB settings: min=%s max=%s payment=%s was_active=%s subscribers=%s",
+                self.min_amount, self.max_amount, self.payment_filter,
+                self._was_active, list(self._subscribers),
             )
         except Exception as exc:
             logger.warning("Could not load DB settings: %s", exc)

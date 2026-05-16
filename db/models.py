@@ -17,7 +17,8 @@ class Settings(Base):
     max_amount:   Mapped[Optional[float]] = mapped_column(Float,   nullable=True)
     notify_taken:   Mapped[bool]  = mapped_column(Boolean, default=True)
     is_active:      Mapped[bool]  = mapped_column(Boolean, default=False)
-    poll_interval:  Mapped[float] = mapped_column(Float,   default=1.0)
+    poll_interval:   Mapped[float] = mapped_column(Float,  default=1.0)
+    payment_filter:  Mapped[str]  = mapped_column(String, default="all")  # all | sbp | card
 
 
 class Subscriber(Base):

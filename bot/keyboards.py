@@ -16,9 +16,28 @@ def main_menu_keyboard(is_running: bool) -> InlineKeyboardMarkup:
 
 def settings_menu_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.button(text="💰 Фильтры суммы",   callback_data="settings:filters")
-    builder.button(text="⏱ Интервал опроса", callback_data="settings:poll_interval")
+    builder.button(text="💰 Фильтры суммы",    callback_data="settings:filters")
+    builder.button(text="💳 Тип реквизитов",   callback_data="settings:payment")
+    builder.button(text="⏱ Интервал опроса",  callback_data="settings:poll_interval")
     builder.button(text="◀️ Назад",           callback_data="settings:back")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def payment_filter_keyboard(current: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    options = (
+        ("all",  "Все заявки"),
+        ("sbp",  "Только СБП (телефон)"),
+        ("card", "Только карта"),
+    )
+    for value, label in options:
+        mark = "✅ " if value == current else ""
+        builder.button(
+            text=f"{mark}{label}",
+            callback_data=f"settings:payment_set:{value}",
+        )
+    builder.button(text="◀️ Назад к настройкам", callback_data="settings:menu")
     builder.adjust(1)
     return builder.as_markup()
 
