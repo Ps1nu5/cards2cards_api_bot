@@ -5,6 +5,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+from aiohttp_socks import ProxyConnector
+
 import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -19,9 +21,15 @@ from db.repository import OrderLogRepository, SettingsRepository, SubscriberRepo
 from monitor import OrderMonitor
 from order_payment import payment_filter_label
 from api_client import ApiError
+
 from processor import OrderProcessor
+import os
+
 
 logger = logging.getLogger(__name__)
+
+
+PROXY_URL = os.environ.get("SESSION_PROXY", "socks5://FdFEQnka:4XRE7Cye@193.200.199.178:64279")
 
 
 class App:
@@ -57,7 +65,8 @@ class App:
         await init_db()
         await self._load_db_settings()
 
-        connector     = aiohttp.TCPConnector(ssl=True, limit=20, ttl_dns_cache=300)
+        connector     = connector = ProxyConnector.from_url(PROXY_URL)
+
         self._session = aiohttp.ClientSession(connector=connector)
 
         self._cred_mgr = CredentialManager(
